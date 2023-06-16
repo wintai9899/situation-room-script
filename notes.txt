@@ -1,7 +1,4 @@
-- Access to situation room DB
-psql -h situation-room.yellowbrick.io -d situation_room_production -U win
-Username`win`
-PW: `X0pcAcIuH$8t`
+
     
     - how to get results or the automated run against build
     
