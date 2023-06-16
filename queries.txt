@@ -1,0 +1,58 @@
+"""
+            WITH latest_master AS(
+                SELECT
+                    id as build_id,
+                FROM ybd_builds
+                WHERE git_branch = 'master'
+                AND length(build_number) < 10
+                ORDER BY id DESC
+                limit 1
+            )
+            ,suite_runs AS (
+                SELECT
+                    S.suite_identity_id                  AS suite_identity_id
+                    , S.id                               AS suite_id
+                    , SI.name                            AS suite_name
+                    , BLD.git_branch
+                    , BLD.version || '-' || BLD.build_number AS build
+                    , S.failed_test_runs_count           AS fail_count
+                    , S.skipped_test_runs_count          AS skip_count
+                    , S.passed_test_runs_count           AS pass_count
+                    , M.hostname
+                FROM suites S
+                JOIN suite_identities SI ON S.suite_identity_id = SI.id
+                JOIN invocations I ON S.invocation_id = I.id
+                JOIN machine_configurations M ON I.machine_configuration_id = M.id
+                JOIN ybd_builds BLD ON BLD.id = I.ybd_build_id
+                JOIN latest_master LM on LM.build_id = I.ybd_build_id
+                WHERE S.failed_test_runs_count > 0
+            
+            )
+            , test_runs AS (
+                SELECT
+                    T.test_case_identity_id
+                    , TI.name as test_cast_name
+                    , T.suite_id
+                    , T.status
+                    , T.expected_status
+                    , T.status_reason
+                    , T.status_detail
+                FROM test_cases T
+                JOIN test_case_identities TI on T.test_case_identity_id = TI.id
+                JOIN suite_runs SR on T.suite_id = SR.suite_id
+                WHERE T.status != T.expected_status
+            )
+            SELECT
+                SR.suite_name
+                , SR.fail_count                                 AS suite_failures
+                , SR.pass_count                                 AS suite_passes
+                , SR.suite_name || '/' || TR.test_cast_name     AS test_name
+                , TR.status
+                , TR.expected_status
+                , TR.status_reason
+                , TR.status_detail
+                , SR.hostname
+                , SR.git_branch
+                , SR.build
+            FROM suite_runs SR, test_runs TR
+            """ 
