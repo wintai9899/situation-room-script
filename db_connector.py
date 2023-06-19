@@ -2,6 +2,8 @@ import os
 import psycopg2
 from dotenv import load_dotenv
 from tabulate import tabulate
+from git import Repo
+import subprocess
 
 # Load envinronment variables from .env file.
 load_dotenv()                                                  
@@ -10,8 +12,10 @@ PG_USER = os.environ.get('DB_USERNAME')
 PG_PASSWORD = os.environ.get('DB_PASSWORD') 
 PG_HOST = os.environ.get('DB_HOST') 
 PG_NAME = os.environ.get('DB_NAME') 
+YBD_REPO_PATH = os.environ.get('YBD_REPO_PATH')
 
-# Create connection to postgres
+repo = Repo(YBD_REPO_PATH)
+
 connection = psycopg2.connect(
                         user=PG_USER,
                         password=PG_PASSWORD,
@@ -22,7 +26,6 @@ connection = psycopg2.connect(
 cursor = connection.cursor()
 
 
-# Get list of failed testcases
 def get_failed_tests_cases():
     
     query = """
@@ -82,6 +85,7 @@ def get_failed_tests_cases():
             --  , SR.git_branch
             --   , SR.build
             FROM suite_runs SR, test_runs TR
+            limit 5;
             """ 
     
     cursor.execute(query)
@@ -96,20 +100,18 @@ def get_failed_tests_cases():
 def get_sha():
     sha_list = []
     query = """
--- Use the sha to retrieve authors from git log sha1...sha2
-    SELECT
-        git_sha,
-        max(id)    as id,
-        max(build_number)  as build_number,
-        max(version) as version
-    FROM ybd_builds
-    WHERE git_branch = 'master'
-    AND length(build_number) < 10
-    group by git_sha
-    ORDER BY max(id) DESC
-    limit 2;
-
-"""
+                SELECT
+                    git_sha,
+                    max(id)    as id,
+                    max(build_number)  as build_number,
+                    max(version) as version
+                FROM ybd_builds
+                WHERE git_branch = 'master'
+                AND length(build_number) < 10
+                group by git_sha
+                ORDER BY max(id) DESC
+                limit 2;
+            """
     cursor.execute(query)
     result = cursor.fetchall()
     for rec in result:
@@ -117,12 +119,45 @@ def get_sha():
     
     return sha_list
 
-# TODO: get authors of commits using sha from query2.
-def get_author(sha_list):
-    latest_sha = sha_list[0]
-    previous_sha = sha_list[1]
+# get author,email of commits using git hash from get_sha().
+def get_commit_info(sha_list):
+
+    author_info = []
+
+    commit_hash_1, commit_hash_2= sha_list
+    commits = repo.iter_commits(f'{commit_hash_1}...{commit_hash_2}')
+    
+    try:
+        #committer_names = set(commit.committer.name for commit in commits)
+        committer_names = set()
+        
+        for commit in commits:
+            commit_info = {}
+            author_name = commit.author.name
+            author_email = commit.author.email
+
+            if author_name not in committer_names and author_name != 'jenkins':
+                commit_info['author'] = author_name
+                commit_info['email'] = author_email
+                #commit_info['date'] = commit.authored_datetime
+                #commit_info['message'] = commit.message
+                committer_names.add(author_name)
+                author_info.append(commit_info)
+            
+            else:
+                continue 
+    
+    except Exception as e:
+        print(f'Error; {e}')
+        return []
+    
+    return author_info
 
 
+#get_commit_author_gitpython(get_sha())
+# result = get_commit_info(['d350e75ad7adef091347587350beca8fd29d00c3','cb2ff30b347522e81610cd3bf758b0a864260f58'])
+# print(result)
 
+get_failed_tests_cases()
+    
 
-#get_failed_tests_cases()
