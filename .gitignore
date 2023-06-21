@@ -1,2 +1,6 @@
-.env
+my_env
+.env 
 notes.txt
+table.txt
+test_functions.py
+
